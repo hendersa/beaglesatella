@@ -1,0 +1,995 @@
+// PRU0 firmware to signal PRU1 to read ADDR[5:0] and DATA_IN[7:0].
+// The data is then pushed to shared memory for userspace. 
+// Written by Andrew Henderson (hendersa@icculus.org). 
+
+#define XID_SCRATCH_BANK0   10
+
+// Interrupt numbers are from prussdrv/include/pruss_intc_mapping.h
+#define PRU0_PRU1_INTERRUPT  17
+#define PRU1_PRU0_INTERRUPT  18
+#define PRU0_ARM_INTERRUPT   19
+//#define PRU1_ARM_INTERRUPT   20
+#define ARM_PRU0_INTERRUPT   21
+//#define ARM_PRU1_INTERRUPT   22
+ 
+  // Register usage scheme
+  // r0-r4: Non-vector temporaries
+
+  // r5-r8: Constants
+#define REG_PRU1_PRU0_INTR      r5.w0
+#define REG_ARM_PRU0_INTR       r6.w0
+#define REG_READ_TABLE_ADDR	r7.w0
+#define REG_WRITE_TABLE_ADDR	r8.w0
+
+  // r9: Scratchpad receipt via XIN
+#define REG_SCRATCHPAD_XIN	r9
+
+  // r10-r19: Satellaview register bank
+#define REG_2188         r10.b0
+#define REG_2189         r10.b1
+#define REG_218A         r10.b2
+#define REG_218B         r10.b3
+#define REG_218C         r11.b0
+#define REG_218D         r11.b1
+#define REG_218E         r11.b2
+#define REG_218F         r11.b3
+#define REG_2190         r12.b0
+#define REG_2191         r12.b1
+#define REG_2192         r12.b2
+#define REG_2193         r12.b3
+#define REG_2194         r13.b0
+#define REG_2195         r13.b1
+#define REG_2196         r13.b2
+#define REG_2197         r13.b3
+#define REG_2198         r14.b0
+#define REG_2199         r14.b1
+#define REG_219A         r14.b2
+#define REG_219B         r14.b3
+#define REG_219C         r15.b0
+#define REG_219D         r15.b1
+#define REG_219E         r15.b2
+#define REG_219F         r15.b3
+#define REG_21A0         r16.b0
+#define REG_21A1         r16.b1
+#define REG_21A2         r16.b2
+#define REG_21A3         r16.b3
+#define REG_21A4         r17.b0
+#define REG_21A5         r17.b1
+#define REG_21A6         r17.b2
+#define REG_21A7         r17.b3
+#define REG_21A8         r18.b0
+#define REG_21A9         r18.b1
+#define REG_21AA         r18.b2
+#define REG_21AB         r18.b3
+#define REG_21AC         r19.b0
+#define REG_21AD         r19.b1
+#define REG_21AE         r19.b2
+#define REG_21AF         r19.b3
+
+#define STREAM1_LC1      r10.b0 // REG_2188 alias
+#define STREAM1_LC2      r10.b1 // REG_2189 alias
+#define STREAM1_LC       r10.w0 
+#define STREAM1_PFCNT    r10.b2 // REG_218A alias
+#define STREAM1_STATUS   r11.b1 // REG_218D alias
+#define STREAM2_LC1      r11.b2 // REG_218E alias
+#define STREAM2_LC2      r11.b3 // REG_218F alias
+#define STREAM2_LC       r11.w2
+#define STREAM2_PFCNT    r12.b0 // REG_2190 alias
+#define STREAM2_STATUS   r12.b3 // REG_2193 alias
+
+// r20-r25: Stream status tracking
+#define STREAM1_QUEUE    r20.w0 // Remaining unbuffered packets
+#define STREAM2_QUEUE    r20.w2 // Remaining unbuffered packets
+
+#define STREAM1_PF_DT_QUEUE r21 // Combo queue (empty queue check)
+#define STREAM1_PF_QUEUE r21.w0 // Prefix byte count (counts down to 0)
+#define STREAM1_DT_QUEUE r21.w2 // Data queue (counts up to 22)
+
+#define STREAM2_PF_DT_QUEUE r22 // Combo queue (empty queue check)
+#define STREAM2_PF_QUEUE r22.w0 // Prefix byte count (counts down to 0)
+#define STREAM2_DT_QUEUE r22.w2 // Data queue (counts up to 22)
+
+#define STREAM1_OFFSET   r23    // Byte offset into stream
+#define STREAM2_OFFSET   r24    // Byte offset into stream
+
+#define STREAM1_FLAGS    r25.b0    // Combo flag (for checks)
+#define STREAM1_PF_LATCH r25.b0.t0 // Prefix latch flag
+#define STREAM1_DT_LATCH r25.b0.t1 // Data latch flag
+#define STREAM1_FIRST    r25.b0.t2 // First packet of stream flag
+
+#define STREAM2_FLAGS    r25.b1    // Combo flag (for checks)
+#define STREAM2_PF_LATCH r25.b1.t0 // Prefix latch flag
+#define STREAM2_DT_LATCH r25.b1.t1 // Data latch flag
+#define STREAM2_FIRST    r25.b1.t2 // First packet of stream flag
+
+#define STREAM1_ORIGIN   r26.w0  // Origin address of stream data
+#define STREAM2_ORIGIN   r26.w2  // Origin address of stream data
+ 
+// r26: Persistent counters
+//#define SER_2199_COUNT   r26.b0
+
+// r27-r29: General purpose for vector usage
+#define REG_VEC_TMP1     r27
+#define REG_VEC_TMP2     r28
+#define REG_VEC_TMP3     r29
+
+// r30,r31: GPIOs, interrupts, etc.
+
+// Data offsets for static test channels
+#define STATIC_LC0000_DATA  0x00   // Time
+#define STATIC_LC0120_DATA  0x14   // Town status
+#define STATIC_LC0124_DATA  0x38   // Channel Map
+#define STATIC_LC0125_DATA  0x7C   // Directory
+#define STATIC_LC0126_DATA  0x8C   // MOTD
+#define STATIC_CHANNEL_DATA 0xA0   // Channel info
+#define CHANNEL1_PACKET     0x100  // Buffer with current packet
+#define CHANNEL2_PACKET     0x120  // Buffer with current packet
+.origin 0
+.entrypoint INIT
+
+INIT:
+  // Enable OCP master port
+  LBCO r0, C4, #4, #4
+  CLR  r0.t4
+  SBCO r0, C4, #4, #4
+
+  // Configure the programmable pointer register for PRU0 
+  // by setting c28_pointer[15:0] field to 0x0120.  This 
+  // will make C28 point to 0x00012000 (PRU shared RAM).
+  MOV  r0, #0x00000120
+  MOV  r1, #0x22028  // CTPPR_0
+  SBBO r0, r1, #0, #4
+
+  // Enable the cycle counter
+  MOV  r1, 0x22000 // CNTRL register
+  LBBO r0, r1, #0, #4
+  SET  r0, r0, #3
+  SBBO r0, r1, #0, #4
+  MOV  r24, 0x2200C // Cycle count register
+
+  // Configure the programmable pointer register for 
+  // PRU0 by setting c31_pointer[15:0] field to 0x0010.
+  // This will make C31 point to 0x80001000 (DDR memory).
+  MOV  r0, #0x00100000
+  MOV  r1, #0x2202C  // CTPPR_1
+  SBBO r0, r1, #0, #4
+
+  // Inital setup values
+  MOV  r0, #0
+  MOV  r1, #0
+  MOV  r2, #0
+  MOV  r3, #0
+  MOV  r4, #0
+
+  // Constant setup
+  MOV  REG_PRU1_PRU0_INTR, PRU1_PRU0_INTERRUPT
+  MOV  REG_ARM_PRU0_INTR, ARM_PRU0_INTERRUPT
+  MOV  REG_READ_TABLE_ADDR, READ_TABLE_00
+  MOV  REG_WRITE_TABLE_ADDR, WRITE_TABLE_00
+
+  // Set initial Satellaview register values
+  CALL RESET_REGISTERS
+
+  // Setup some initial hard-coded channel data
+  CALL LOAD_STATIC_DATA
+
+//WAIT_FOR_REQUEST:
+  // Wait for ARM to request a sample via interrupt and then clear the interrupt
+//  WBS  r31, 30
+//  SBCO &REG_ARM_PRU0_INTR, C0, 0x24, 4
+
+// Spin while either PARD or PAWR are active (clear), since that means 
+// we're still on a previous R/W op
+POLL_CLEAR:
+  AND r1.b0, r31.b1, 0xC0 // Mask r31[15:14] and store in r1[7:6]
+  QBNE POLL_CLEAR, r1.b0, 0xC0 // Jump back if PARD/PAWR are not clear
+
+// Now that PARD/PAWR are not active, spin until one of them is. When one
+// is active, that means we're at the start of a new R/W op.
+POLL_SET:
+  MOV r1.b0, r31.b1
+  //AND r1.b0, r1.b0, 0xC0 // Mask r31[15:14] and store in r1[7:6]
+  QBEQ POLL_SET, r1.b0, 0xC0 // Jump back if PARD and PAWR are both set
+
+  // DEBUG: BENCHMARK START (stored in r22)
+  LBBO &r22, r24, 0x0, 4
+
+  // Mask r31[15:14] and store in r1[7:6]
+  //AND r1.b0, r31.b1, 0xC0
+
+  // Signal PRU1 to request a sample of the filtered ADDR and DATA buses
+  MOV  r31, PRU0_PRU1_INTERRUPT + 16
+
+  // Wait for PRU1 to signal us back and then clear interrupt
+  WBS  r31, 30
+  SBCO &REG_PRU1_PRU0_INTR, C0, 0x24, 4
+
+  // Take 16-bits of data from scratch register and store it in r2  
+  XIN  XID_SCRATCH_BANK0, &REG_SCRATCHPAD_XIN, 4
+
+  // Figure out what MMIO register is involved and calc jump table offset
+  AND r3.b0, REG_SCRATCHPAD_XIN.b1, 0x3F // Mask off filtered address bits
+
+  // r1[6] is /PARD. Is the bit clear?
+  QBBC READ_JUMP, r1.b0.t6 // Jump to read vector if r1[6] is clear
+
+// This is a write to a Satellaview register
+WRITE_JUMP:
+  ADD r4.w0, REG_WRITE_TABLE_ADDR, r3.b0
+  JMP r4.w0
+
+// This is a read from a Satellaview register
+READ_JUMP:
+  // DEBUG
+  MOV  r30.b0, 0xFF
+  //ADD r4.w0, REG_READ_TABLE_ADDR, r3.b0
+  //JMP r4.w0
+
+RETURN_FROM_VECTOR:
+
+  // DEBUG: BENCHMARK END (stored in r23)
+  LBBO &r23, r24, 0x0, 4
+  SUB  r23, r23, r22
+  MOV REG_SCRATCHPAD_XIN.b3, r23.b0
+
+  // Add in the PARD/PAWR bits
+  MOV  REG_SCRATCHPAD_XIN.b2, r1.b0
+ 
+  // Store into PRU shared memory
+  SBCO &REG_SCRATCHPAD_XIN, C28, #0, #4
+
+FINISH_SIGNAL:
+
+  // Signal ARM that we're done
+  //MOV  r31, (PRU0_ARM_INTERRUPT + 16)
+
+  // Clear interrupt from PRU1
+  //SBCO &REG_PRU1_PRU0_INTR, C0, 0x24, 4
+
+  // Have we received the kill signal?
+  //QBBS SHUTDOWN, r31, 31
+
+  // Repeat forever
+  JMP POLL_CLEAR
+  //JMP WAIT_FOR_REQUEST
+
+SHUTDOWN:
+
+  // Shutdown (never reached)
+  MOV  r31.b0, 19+16
+
+HALT
+
+// *** BEGIN READ/WRITE VECTOR TABLES ***
+//.origin 0x200
+// *** BEGIN READ VECTOR TABLE ***
+// *** WE SHOULD NEVER REACH THESE FIRST EIGHT
+READ_TABLE_00:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_01:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_02:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_03:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_04:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_05:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_06:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_07:
+  JMP HANDLE_READ_ERROR
+
+// *** BEGIN VALID ENTRIES ***
+READ_TABLE_08:
+  JMP HANDLE_READ_08
+READ_TABLE_09:
+  JMP HANDLE_READ_09
+READ_TABLE_0A:
+  JMP HANDLE_READ_0A
+READ_TABLE_0B:
+  JMP HANDLE_READ_0B
+READ_TABLE_0C:
+  JMP HANDLE_READ_0C
+READ_TABLE_0D:
+  JMP HANDLE_READ_0D
+READ_TABLE_0E:
+  JMP HANDLE_READ_0E
+READ_TABLE_0F:
+  JMP HANDLE_READ_0F
+READ_TABLE_10:
+  JMP HANDLE_READ_10
+READ_TABLE_11:
+  JMP HANDLE_READ_11
+READ_TABLE_12:
+  JMP HANDLE_READ_12
+READ_TABLE_13:
+  JMP HANDLE_READ_13
+READ_TABLE_14:
+  JMP HANDLE_READ_14
+READ_TABLE_15:
+  JMP HANDLE_READ_15
+READ_TABLE_16:
+  JMP HANDLE_READ_16
+READ_TABLE_17:
+  JMP HANDLE_READ_17
+READ_TABLE_18:
+  JMP HANDLE_READ_18
+READ_TABLE_19:
+  JMP HANDLE_READ_19
+READ_TABLE_1A:
+  JMP HANDLE_READ_1A
+READ_TABLE_1B:
+  JMP HANDLE_READ_1B
+READ_TABLE_1C:
+  JMP HANDLE_READ_1C
+READ_TABLE_1D:
+  JMP HANDLE_READ_1D
+READ_TABLE_1E:
+  JMP HANDLE_READ_1E
+READ_TABLE_1F:
+  JMP HANDLE_READ_1F
+READ_TABLE_20:
+  JMP HANDLE_READ_20
+READ_TABLE_21:
+  JMP HANDLE_READ_21
+READ_TABLE_22:
+  JMP HANDLE_READ_22
+READ_TABLE_23:
+  JMP HANDLE_READ_23
+READ_TABLE_24:
+  JMP HANDLE_READ_24
+READ_TABLE_25:
+  JMP HANDLE_READ_25
+READ_TABLE_26:
+  JMP HANDLE_READ_26
+READ_TABLE_27:
+  JMP HANDLE_READ_27
+READ_TABLE_28:
+  JMP HANDLE_READ_28
+READ_TABLE_29:
+  JMP HANDLE_READ_29
+READ_TABLE_2A:
+  JMP HANDLE_READ_2A
+READ_TABLE_2B:
+  JMP HANDLE_READ_2B
+READ_TABLE_2C:
+  JMP HANDLE_READ_2C
+READ_TABLE_2D:
+  JMP HANDLE_READ_2D
+READ_TABLE_2E:
+  JMP HANDLE_READ_2E
+READ_TABLE_2F:
+  JMP HANDLE_READ_2F
+
+// *** WE SHOULD NEVER NEED THE REST OF THESE ***
+READ_TABLE_30:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_31:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_32:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_33:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_34:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_35:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_36:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_37:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_38:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_39:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_3A:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_3B:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_3C:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_3D:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_3E:
+  JMP HANDLE_READ_ERROR
+READ_TABLE_3F:
+  JMP HANDLE_READ_ERROR
+
+// ** BEGIN WRITE VECTOR TABLE ***
+// *** WE SHOULD NEVER REACH THESE FIRST EIGHT ***
+WRITE_TABLE_00:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_01:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_02:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_03:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_04:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_05:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_06:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_07:
+  JMP HANDLE_WRITE_ERROR
+
+// *** BEGIN VALID ENTRIES ***
+WRITE_TABLE_08:
+  JMP HANDLE_WRITE_08
+WRITE_TABLE_09:
+  JMP HANDLE_WRITE_09
+WRITE_TABLE_0A:
+  JMP HANDLE_WRITE_0A
+WRITE_TABLE_0B:
+  JMP HANDLE_WRITE_0B
+WRITE_TABLE_0C:
+  JMP HANDLE_WRITE_0C
+WRITE_TABLE_0D:
+  JMP HANDLE_WRITE_0D
+WRITE_TABLE_0E:
+  JMP HANDLE_WRITE_0E
+WRITE_TABLE_0F:
+  JMP HANDLE_WRITE_0F
+WRITE_TABLE_10:
+  JMP HANDLE_WRITE_10
+WRITE_TABLE_11:
+  JMP HANDLE_WRITE_11
+WRITE_TABLE_12:
+  JMP HANDLE_WRITE_12
+WRITE_TABLE_13:
+  JMP HANDLE_WRITE_13
+WRITE_TABLE_14:
+  JMP HANDLE_WRITE_14
+WRITE_TABLE_15:
+  JMP HANDLE_WRITE_15
+WRITE_TABLE_16:
+  JMP HANDLE_WRITE_16
+WRITE_TABLE_17:
+  JMP HANDLE_WRITE_17
+WRITE_TABLE_18:
+  JMP HANDLE_WRITE_18
+WRITE_TABLE_19:
+  JMP HANDLE_WRITE_19
+WRITE_TABLE_1A:
+  JMP HANDLE_WRITE_1A
+WRITE_TABLE_1B:
+  JMP HANDLE_WRITE_1B
+WRITE_TABLE_1C:
+  JMP HANDLE_WRITE_1C
+WRITE_TABLE_1D:
+  JMP HANDLE_WRITE_1D
+WRITE_TABLE_1E:
+  JMP HANDLE_WRITE_1E
+WRITE_TABLE_1F:
+  JMP HANDLE_WRITE_1F
+WRITE_TABLE_20:
+  JMP HANDLE_WRITE_20
+WRITE_TABLE_21:
+  JMP HANDLE_WRITE_21
+WRITE_TABLE_22:
+  JMP HANDLE_WRITE_22
+WRITE_TABLE_23:
+  JMP HANDLE_WRITE_23
+WRITE_TABLE_24:
+  JMP HANDLE_WRITE_24
+WRITE_TABLE_25:
+  JMP HANDLE_WRITE_25
+WRITE_TABLE_26:
+  JMP HANDLE_WRITE_26
+WRITE_TABLE_27:
+  JMP HANDLE_WRITE_27
+WRITE_TABLE_28:
+  JMP HANDLE_WRITE_28
+WRITE_TABLE_29:
+  JMP HANDLE_WRITE_29
+WRITE_TABLE_2A:
+  JMP HANDLE_WRITE_2A
+WRITE_TABLE_2B:
+  JMP HANDLE_WRITE_2B
+WRITE_TABLE_2C:
+  JMP HANDLE_WRITE_2C
+WRITE_TABLE_2D:
+  JMP HANDLE_WRITE_2D
+WRITE_TABLE_2E:
+  JMP HANDLE_WRITE_2E
+WRITE_TABLE_2F:
+  JMP HANDLE_WRITE_2F
+
+// *** WE SHOULD NEVER NEED THE REST OF THESE ***
+WRITE_TABLE_30:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_31:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_32:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_33:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_34:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_35:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_36:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_37:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_38:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_39:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_3A:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_3B:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_3C:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_3D:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_3E:
+  JMP HANDLE_WRITE_ERROR
+WRITE_TABLE_3F:
+  JMP HANDLE_WRITE_ERROR
+// *** END READ/WRITE JUMP TABLES ***
+
+// *** BEGIN READ HANDLERS ***
+HANDLE_READ_08: // $2188
+  MOV  r30.b0, STREAM1_LC1
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_09: // $2189
+  MOV  r30.b0, STREAM1_LC2
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_0A: // $218A
+  MOV  r30.b0, REG_218A // DEBUG
+
+  // If either stream.pf_latch or stream.dt_latch aren't set, return 0
+  AND  REG_VEC_TMP1, STREAM1_FLAGS, 0x02
+  QBLT HANDLE_READ_0A_STREAM_DISABLED, REG_VEC_TMP1, 0x03 
+  //MOV  r30.b0, REG_218A
+
+  // temp1 = stream.pf_latch | stream.dt_latch 
+  LMBD REG_VEC_TMP1, STREAM1_PF_DT_QUEUE, 1
+
+  // if (temp1) jump to HANDLE_READ_02_1
+  QBEQ HANDLE_READ_0A_1, REG_VEC_TMP1, 32
+  // else, stream not enabled
+  MOV  r30.b0, 0x00
+  JMP  RETURN_FROM_VECTOR
+  
+  HANDLE_READ_0A_1:
+    // stream.offset = 0;
+    MOV STREAM1_OFFSET, 0x00000000
+
+    // temp1 = (stream.channel == 0);
+    LMBD REG_VEC_TMP1, STREAM1_LC, 1
+
+    // if (temp1 != true) jump to HANDLE_READ_02_2
+    QBNE HANDLE_READ_0A_2, REG_VEC_TMP1, 32
+
+    // Load the next stream
+    //CALL STREAM1_LOAD
+
+  HANDLE_READ_0A_2:
+  // stream.count++; - Ignore
+  JMP  RETURN_FROM_VECTOR
+
+  HANDLE_READ_0A_STREAM_DISABLED:
+    MOV  r30.b0, 0x00
+    JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_0B: // $218B
+  MOV  r30.b0, REG_218B
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_0C: // $218C
+  MOV  r30.b0, REG_218C
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_0D: // $218D
+  MOV  r30.b0, STREAM1_STATUS
+  QBBC HANDLE_READ_0D_1, REG_2194.t0
+  MOV  STREAM1_STATUS, 0x00
+  HANDLE_READ_0D_1:
+    JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_0E: // $218E
+  MOV  r30.b0, STREAM2_LC1
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_0F: // $218F
+  MOV  r30.b0, STREAM2_LC2
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_10:  // $2190
+  MOV  r30.b0, REG_2190
+  // TODO LOGIC HERE
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_11: // $2191
+  MOV  r30.b0, REG_2191
+  // TODO LOGIC HERE
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_12: // $2192
+  MOV  r30.b0, REG_2192
+  // TODO LOGIC HERE
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_13: // $2193
+  MOV  r30.b0, STREAM2_STATUS
+  QBBC HANDLE_READ_13_1, REG_2194.t0
+  MOV  STREAM2_STATUS, 0x00
+  HANDLE_READ_13_1:
+    JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_14: // $2194
+  MOV  r30.b0, REG_2194
+  //CALL WRITE_2194__ENABLE_STREAMS_AND_2199
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_15: // $2195
+  MOV  r30.b0, REG_2195
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_16: // $2196
+  MOV  r30.b0, REG_2196
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_17: // $2197
+  MOV  r30.b0, REG_2197
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_18: // $2198
+  MOV  r30.b0, REG_2198
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_19: // $2199
+  MOV  r30.b0, REG_2199
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_1A: // $219A
+  MOV  r30.b0, REG_219A
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_1B: // $219B
+HANDLE_READ_1C: // $219C
+HANDLE_READ_1D: // $219D
+HANDLE_READ_1E: // $219E
+HANDLE_READ_1F: // $219F
+HANDLE_READ_20: // $21A0
+HANDLE_READ_21: // $21A1
+HANDLE_READ_22: // $21A2
+HANDLE_READ_23: // $21A3
+HANDLE_READ_24: // $21A4
+HANDLE_READ_25: // $21A5
+HANDLE_READ_26: // $21A6
+HANDLE_READ_27: // $21A7
+HANDLE_READ_28: // $21A8
+HANDLE_READ_29: // $21A9
+HANDLE_READ_2A: // $21AA
+HANDLE_READ_2B: // $21AB
+HANDLE_READ_2C: // $21AC
+HANDLE_READ_2D: // $21AD
+HANDLE_READ_2E: // $21AE
+HANDLE_READ_2F: // $21AF
+  MOV  r30.b0, 0x00
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_READ_ERROR:
+  MOV  r30.b0, 0x00
+  JMP RETURN_FROM_VECTOR
+// *** END READ HANDLERS ***
+
+// *** BEGIN WRITE HANDLERS ***
+HANDLE_WRITE_08: // $2188
+  //QBEQ HANDLE_WRITE_08_1, STREAM1_LC1, REG_SCRATCHPAD_XIN.b0
+
+  //HANDLE_WRITE_08_1:
+  MOV  STREAM1_LC1, REG_SCRATCHPAD_XIN.b0
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_09: // $2189
+  QBEQ HANDLE_WRITE_09_1, STREAM1_LC2, REG_SCRATCHPAD_XIN.b0
+  //MOV  STREAM1_COUNT, 0x00
+  HANDLE_WRITE_09_1:
+    MOV  STREAM1_LC2, REG_SCRATCHPAD_XIN.b0
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_0A: // $218A (read-only register)
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_0B: // $218B
+  // Reset PF queue
+  MOV  STREAM1_PF_QUEUE, 0x0000
+  QBEQ HANDLE_WRITE_0B_1, REG_SCRATCHPAD_XIN.b0, 0x00
+  
+  // Set latch and adjust registers as appropriate  
+  SET  STREAM1_PF_LATCH 
+  JMP  RETURN_FROM_VECTOR
+
+  // Clear latch and adjust registers as appropriate
+  HANDLE_WRITE_0B_1:
+    CLR  STREAM1_PF_LATCH
+    // Set $218A to 0x00 (clear prefix count)
+    MOV  STREAM1_PFCNT, 0x00
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_0C: // $218C 
+  MOV  STREAM1_DT_QUEUE, 0x0000
+  QBEQ HANDLE_WRITE_0C_1, REG_SCRATCHPAD_XIN.b0, 0x00
+    SET  STREAM1_DT_LATCH
+    JMP  RETURN_FROM_VECTOR
+  HANDLE_WRITE_0C_1:
+    CLR  STREAM1_DT_LATCH
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_0D: // $218D (read-only register)
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_0E: // $218E
+  QBEQ HANDLE_WRITE_0E_1, STREAM2_LC1, REG_SCRATCHPAD_XIN.b0
+  //MOV  STREAM2_COUNT, 0x00
+  HANDLE_WRITE_0E_1:
+    MOV  STREAM2_LC1, REG_SCRATCHPAD_XIN.b0
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_0F: // $218F
+  QBEQ HANDLE_WRITE_0F_1, STREAM2_LC2, REG_SCRATCHPAD_XIN.b0
+  //MOV  STREAM2_COUNT, 0x00
+  HANDLE_WRITE_0F_1:
+    MOV  STREAM2_LC2, REG_SCRATCHPAD_XIN.b0
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_10: // $2190 (read-only register)
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_11: // $2191
+  MOV  STREAM2_PF_QUEUE, 0x0000
+  QBEQ HANDLE_WRITE_11_1, REG_SCRATCHPAD_XIN.b0, 0x00
+    SET  STREAM2_PF_LATCH
+    JMP  RETURN_FROM_VECTOR
+  HANDLE_WRITE_11_1:
+    CLR  STREAM2_PF_LATCH
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_12: // $2192
+  MOV  STREAM2_DT_QUEUE, 0x0000
+  QBEQ HANDLE_WRITE_12_1, REG_SCRATCHPAD_XIN.b0, 0x00
+    SET  STREAM2_DT_LATCH
+    JMP  RETURN_FROM_VECTOR
+  HANDLE_WRITE_12_1:
+    CLR  STREAM2_DT_LATCH
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_13: // $2193 (read-only register)
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_14: // $2194
+  MOV  REG_2194, REG_SCRATCHPAD_XIN.b0
+  // TODO: Implement logic
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_15: // $2195 (always returns 0x00 on read)
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_16: // $2196 (read-only register)
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_17: // $2197 (echo back for now)
+  MOV  REG_2197, REG_SCRATCHPAD_XIN.b0
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_18: // $2198 (echo back for now)
+  MOV  REG_2198, REG_SCRATCHPAD_XIN.b0
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_19: // $2199 (ignore serial for now)
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_1A: // $219A (read-only register?)
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_1B: // $219B (read-only register?)
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_1C: // $219C (read-only register?)
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_1D: // $219D (read-only register?)
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_1E: // $219E (read-only register?)
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_1F: // $219F (read-only register?)
+  JMP  RETURN_FROM_VECTOR
+
+// $21A0-$21AF: EXT port logic
+HANDLE_WRITE_20: // $21A0
+HANDLE_WRITE_21: // $21A1
+HANDLE_WRITE_22: // $21A2
+HANDLE_WRITE_23: // $21A3
+HANDLE_WRITE_24: // $21A4
+HANDLE_WRITE_25: // $21A5
+HANDLE_WRITE_26: // $21A6
+HANDLE_WRITE_27: // $21A7
+HANDLE_WRITE_28: // $21A8
+HANDLE_WRITE_29: // $21A9
+HANDLE_WRITE_2A: // $21AA
+HANDLE_WRITE_2B: // $21AB
+HANDLE_WRITE_2C: // $21AC
+HANDLE_WRITE_2D: // $21AD
+HANDLE_WRITE_2E: // $21AE
+HANDLE_WRITE_2F: // $21AF
+  JMP  RETURN_FROM_VECTOR
+
+HANDLE_WRITE_ERROR: // Ignore invalid write
+  JMP  RETURN_FROM_VECTOR
+
+RESET_REGISTERS:
+  // Satellaview registers initialization
+  MOV  r10, 0x00000000 // $2188-$218B
+  MOV  r11, 0x00000000 // $218C-$218F
+  MOV  r12, 0x00000000 // $2190-$2193
+  MOV  r13, 0xFF100000 // $2194-$2197
+  MOV  r14, 0x00100180 // $2198-$219B
+  MOV  r15, 0x00000000 // $219C-$219F
+  MOV  r16, 0x00000000 // $21A0-$21A3
+  MOV  r17, 0x00000000 // $21A4-$21A7
+  MOV  r18, 0x00000000 // $21A8-$21AB
+  MOV  r19, 0x00000000 // $21AC-$21AF
+
+  // Clear stream registers
+  MOV  r20, 0x00000000
+  MOV  r21, 0x00000000
+  MOV  r22, 0x00000000
+  MOV  r23, 0x00000000
+
+  // Clear the rest of the temp registers
+  MOV  r24, 0x00000000
+  MOV  r25, 0x00000000
+  MOV  r26, 0x00000000
+  MOV  r27, 0x00000000
+  MOV  r28, 0x00000000
+  MOV  r29, 0x00000000
+
+  RET
+
+WRITE_2194__ENABLE_STREAMS_AND_2199:
+  QBBS WRITE_2194__ENABLE_STREAMS_AND_2199_1, REG_2194.t0
+    MOV REG_2199, 0xFF // Disabled serial I/O
+    //MOV SER_2199_COUNT, 0
+    RET
+
+  WRITE_2194__ENABLE_STREAMS_AND_2199_1:
+    //ADD SER_2199_COUNT, SER_2199_COUNT, 1
+    //QBEQ WRITE_2194__ENABLE_STREAMS_AND_2199_2, SER_2199_COUNT, 0x4
+    // Bytes 1-3 of an "enabled response"
+    MOV REG_2199, 0x00
+    RET
+
+    WRITE_2194__ENABLE_STREAMS_AND_2199_2:
+      // Byte 0 of an "enabled response"
+      MOV REG_2199, 0xE0  
+      //MOV SER_2199_COUNT, 0x00
+     
+  RET
+
+LOAD_STATIC_DATA:
+
+  // Load static LC0000 data (20 bytes)
+  MOV  r24, 0x00000000
+  MOV  r25, 0x00010110
+  MOV  r26, 0x00000000 // 00 minute, 00 second
+  MOV  r26, 0x0C010100 // Sunday Dec 1, 00 hour
+  MOV  r27, 0x0000D007 // 2000 + padding
+  SBCO &r24, C24, STATIC_LC0000_DATA, 20
+
+  // Load static LC0120 data (34 + 2 bytes)
+  MOV  r24, 0x00000000
+  MOV  r25, 0x0001011D
+  MOV  r26, 0x01000000
+  MOV  r27, 0x00000001
+  SBCO &r24, C24, STATIC_LC0120_DATA, 16
+  MOV  r24, 0x1F003000
+  MOV  r25, 0x00000000
+  MOV  r26, 0x00000000
+  MOV  r27, 0x00000000
+  MOV  r28, 0x00000000
+  SBCO &r24, C24, STATIC_LC0120_DATA + 16, 20
+
+  // Load static LC0124 data (68 bytes)
+  MOV  r24, 0x00000000
+  MOV  r25, 0x0046533F
+  MOV  r26, 0x01000000
+  MOV  r27, 0x0401019A
+  SBCO &r24, C24, STATIC_LC0124_DATA, 16
+  MOV  r24, 0x00050002
+  MOV  r25, 0x00000000
+  MOV  r26, 0x20000A00
+  MOV  r27, 0x06000301
+  SBCO &r24, C24, STATIC_LC0124_DATA + 16, 16
+  MOV  r24, 0x00000000
+  MOV  r25, 0x000A0000
+  MOV  r26, 0x00010125
+  MOV  r27, 0x00000004
+  SBCO &r24, C24, STATIC_LC0124_DATA + 32, 16
+  MOV  r24, 0x0A000000
+  MOV  r25, 0x00012600
+  MOV  r26, 0x00010125
+  MOV  r27, 0x00000004
+  MOV  r28, 0x0000000A
+  SBCO &r24, C24, STATIC_LC0124_DATA + 48, 20
+
+  // Load static LC0125 data (16 bytes)
+  MOV  r24, 0x00000000
+  MOV  r25, 0x0001010B
+  MOV  r26, 0x00010000
+  MOV  r27, 0x00000000
+  SBCO &r24, C24, STATIC_LC0125_DATA, 16
+
+  // Load static LC0126 data (33 + 3 bytes)
+  MOV  r24, 0x00000000
+  MOV  r25, 0x0001011C
+  MOV  r26, 0x65570000
+  MOV  r27, 0x6D6F636C
+  SBCO &r24, C24, STATIC_LC0126_DATA, 16
+  MOV  r24, 0x65422065
+  MOV  r25, 0x656C6761
+  MOV  r26, 0x65746153
+  MOV  r27, 0x21616C6C
+  MOV  r28, 0x00000000
+  SBCO &r24, C24, STATIC_LC0126_DATA + 16, 20
+
+  RET
+
+FILL_CHANNEL1_PACKET_BUFFER:
+  // Check for logical channel 0000
+  //MOV REG_VEC_TMP1, 0x0000
+  //QBEQ FIND_STREAM1_CH0000, STREAM1_LC, REG_VEC_TMP1.w0  
+
+  // Check for logical channel 0120
+  //MOV REG_VEC_TMP1, 0x0120
+  //QBEQ FIND_STREAM1_CH0120, STREAM1_LC, REG_VEC_TMP1.w0
+  
+  // Check for logical channel 0124
+  //MOV REG_VEC_TMP1, 0x0124
+  //QBEQ FIND_STREAM1_CH0124, STREAM1_LC, REG_VEC_TMP1.w0
+
+  // Check for logical channel 0125
+  //MOV REG_VEC_TMP1, 0x0125
+  //QBEQ FIND_STREAM1_CH0125, STREAM1_LC, REG_VEC_TMP1.w0
+
+  // Check for logical channel 0126
+  //MOV REG_VEC_TMP1, 0x0126
+  //QBEQ FIND_STREAM1_CH0126, STREAM1_LC, REG_VEC_TMP1.w0
+
+  //FIND_STREAM1_CH0000:
+  // Load static channel lookup table
+  // (2 bytes) Location in the static data table
+  // (2 bytes) Stream size
+  // Logical channel 0000 
+  //LDI  r24.w0, STATIC_LC0000_DATA
+  //LDI  r24.w2, 20
+
+   
+  // Logical channel 0120
+  //LDI  r25.w0, STATIC_LC0120_DATA
+  //LDI  r25.w2, 34
+  // Logical channel 0124
+  //LDI  r26.w0, STATIC_LC0124_DATA
+  //LDI  r26.w2, 68
+  // Logical channel 0125
+  //LDI  r27.w0, STATIC_LC0125_DATA
+  //LDI  r27.w2, 16
+  // Logical channel 0126 
+  //LDI  r28.w0, STATIC_LC0126_DATA
+  //LDI  r28.w2, 33
+  // Write lookup table into memory
+  //SBCO &r24, C24, STATIC_CHANNEL_DATA, 20
+
+  //RET
+

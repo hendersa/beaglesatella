@@ -1,0 +1,26 @@
+CHIP "C:\TEMP\BEAGLESATELLA\CPLD\BEAGLESATELLA" ASSIGNED TO AN PLCC44
+IRQ_3V					: 12
+TDI					: 7
+SFC_A5					: 21
+SFC_A4					: 20
+SFC_A3					: 19
+SFC_A2					: 18
+SFC_A1					: 17
+SFC_A0					: 16
+DATA_BUS_OE					: 14
+TMS					: 13
+SFC_A6					: 24
+SFC_A7					: 25
+PAWR					: 26
+PARD					: 27
+IRQ					: 28
+OUT_A0					: 29
+OUT_A1					: 31
+TCK					: 32
+OUT_A2					: 33
+OUT_A3					: 34
+OUT_A4					: 36
+OUT_A5					: 37
+TDO					: 38
+PAWR_5V					: 39
+PARD_5V					: 40

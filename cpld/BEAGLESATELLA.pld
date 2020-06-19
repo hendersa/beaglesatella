@@ -1,0 +1,74 @@
+Name     BeagleSatella;
+PartNo   00;
+Date     2/13/2020;
+Revision 01 ;
+Designer Andrew Henderson (hendersa@icculus.org);
+Company  N/A;
+Assembly None;
+Location N/A;
+Device   f1504ispplcc44;
+
+property   atmel {cascade_logic=on};
+property   atmel {logic_doubling=off};
+property   atmel {output_fast=on};
+property   atmel {pin_keep=on};
+property   atmel {preassign=keep};
+property   atmel {security=off};
+property   atmel {xor_synthesis=on};
+property   atmel {jtag=on};
+
+/* SFC-side signals */
+PIN 27 = PARD;
+PIN 26 = PAWR;
+PIN 28 = IRQ;
+PIN [25,24,21,20,19,18,17,16] = [SFC_A7..0];
+
+/* BeagleBone-side signals */
+PIN [37,36,34,33,31,29] = [OUT_A5..0];
+PIN 40 = PARD_5V;
+PIN 39 = PAWR_5V;
+PIN 12 = IRQ_3V;
+
+/* Data bus tri-state control signal */
+PIN 14 = DATA_BUS_OE;
+
+/* Always enable output on output address/control signals */
+[OUT_A5..0].OE = 'b'111111;
+PAWR_5V.OE = 'b'1;
+PARD_5V.OE = 'b'1;
+DATA_BUS_OE.OE = 'b'1;
+
+/* This converts the SFC address into an offset from $2188 (0x00 is invalid) */
+TABLE [SFC_A5..0] => [TEMP_A5..0] {
+	[00..07] => 00;
+	08=>08; 09=>09; 0A=>0A; 0B=>0B; 0C=>0C; 0D=>0D; 0E=>0E; 0F=>0F;
+	10=>10; 11=>11; 12=>12; 13=>13; 14=>14; 15=>15; 16=>16; 17=>17;
+	18=>18; 19=>19; 1A=>1A; 1B=>1B; 1C=>1C; 1D=>1D; 1E=>1E; 1F=>1F;
+	20=>20; 21=>21; 22=>22; 23=>23; 24=>24; 25=>25; 26=>26; 27=>27;
+	28=>28; 29=>29; 2A=>2A; 2B=>2B; 2C=>2C; 2D=>2D; 2E=>2E; 2F=>2F;
+	[30..3F] => 00;
+}
+
+/* ADDR_FILTER is only set for B-Bus addresses 0x88 through 0xAF. */
+TABLE [SFC_A7..0] => [ADDR_FILTER] {
+	[00..87] => 'b'0; 
+	[88..AF] => 'b'1;
+	[B0..FF] => 'b'0;
+}
+
+/* Pass-through control signal */
+IRQ = IRQ_3V;
+
+/* Only activate PARD/PAWR/DATA active low control signals if the address passes the filter. */
+PAWR_5V = !(PARD & !PAWR & ADDR_FILTER);
+PARD_5V = !(!PARD & PAWR & ADDR_FILTER);
+DATA_BUS_OE = !(!PARD_5V & PAWR_5V);
+
+/* If just PARD or PAWR is asserted, pass the register offset.
+   Otherwise, pass a register offset of 0x00 (invalid $2180 + $00). */
+OUT_A5 = ((PARD_5V $ PAWR_5V) & TEMP_A5);
+OUT_A4 = ((PARD_5V $ PAWR_5V) & TEMP_A4);
+OUT_A3 = ((PARD_5V $ PAWR_5V) & TEMP_A3);
+OUT_A2 = ((PARD_5V $ PAWR_5V) & TEMP_A2);
+OUT_A1 = ((PARD_5V $ PAWR_5V) & TEMP_A1);
+OUT_A0 = ((PARD_5V $ PAWR_5V) & TEMP_A0);

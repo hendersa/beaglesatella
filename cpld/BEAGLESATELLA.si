@@ -1,0 +1,27 @@
+Name     BeagleSatella;
+PartNo   00;
+Date     2/13/2020;
+Revision 01;
+Designer Andrew Henderson (hendersa@icculus.org);
+Company  N/A;
+Assembly None;
+Location N/A;
+Device   f1504ispplcc44;
+
+
+ORDER: SFC_A7, SFC_A6, SFC_A5, SFC_A4, SFC_A3, SFC_A2, SFC_A1, SFC_A0, OUT_A5, OUT_A4, OUT_A3, OUT_A2, OUT_A1, OUT_A0, PARD, PAWR, PARD_5V, PAWR_5V, DATA_BUS_OE; 
+
+
+VECTORS:
+10000111******11HHH
+10001000******11HHH
+10101111******11HHH
+10110000******11HHH
+10111111******10HHH
+10000000******10HHH
+10001111******10HLH
+10001111******01LHL
+10000111******10HHH
+10001000******10HLH
+10101111******10HLH
+10110000******10HHH

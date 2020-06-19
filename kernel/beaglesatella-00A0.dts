@@ -1,0 +1,153 @@
+/*
+ * Copyright (C) 2020 Andrew Henderson (hendersa@icculus.org)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "ti,beaglebone-black";
+
+	/* identification */
+	part-number = "BEAGLESATELLA";
+	version = "00A0";
+
+	fragment@0 {
+		target-path="/";
+		__overlay__ {
+			pru-beaglesatella {
+				compatible = "beaglesatella,beaglesatella";
+				pruss = <&pruss>;
+				interrupt-parent = <&pruss_intc>;
+				interrupts = <22>, <23>, <24>;
+				interrupt-names = "from_bl_1", "to_bl", "from_bl_2";
+			};
+		};
+	};
+
+	/*
+	 * Free up the pins used by the cape from the pinmux helpers.
+	 */
+	fragment@1 {
+		target = <&ocp>;
+		__overlay__ {
+
+			/* PRU0 R30 DataOut[7:0] pins (Mode 5, Output) */
+			P9_31_pinmux { status = "disabled"; };  /* P9_31:   R30[0] -> DataOut[0] */
+			P9_29_pinmux { status = "disabled"; };  /* P9_29:   R30[1] -> DataOut[1] */ 
+			P9_30_pinmux { status = "disabled"; };  /* P9_30:   R30[2] -> DataOut[2] */
+			P9_28_pinmux { status = "disabled"; };  /* P9_28:   R30[3] -> DataOut[3] */
+			P9_92_pinmux { status = "disabled"; };	/* P9_42.1: R30[4] -> DataOut[4] */
+			P9_27_pinmux { status = "disabled"; };	/* P9_27:   R30[5] -> DataOut[5] */
+			P9_91_pinmux { status = "disabled"; };  /* P9_41.1: R30[6] -> DataOut[6] */
+			P9_25_pinmux { status = "disabled"; };	/* P9_25:   R30[7] -> DataOut[7] */
+
+			/* Eliminate P9_41/42 conflicts (Mode 7, Input) */
+			P9_41_pinmux { status = "disabled"; };
+			P9_42_pinmux { status = "disabled"; };
+
+			/* PRU0 R31 PARD input pin (Mode 6, Input) */
+			P8_16_pinmux { status = "disabled"; };	/* P8_16: PARD -> R31[14] */
+
+			/* PRU0 R31 PAWR input pin (Mode 6, Input) */
+			P8_15_pinmux { status = "disabled"; };	/* P8_15: PAWR -> R31[15] */
+
+			/* PRU1 R31 DataIn[7:0] pins (Mode 6, Input) */
+			P8_45_pinmux { status = "disabled"; };	/* P8_45: DataIn[0] -> R31[0] */
+			P8_46_pinmux { status = "disabled"; };	/* P8_46: DataIn[1] -> R31[1] */
+			P8_43_pinmux { status = "disabled"; };	/* P8_43: DataIn[2] -> R31[2] */
+			P8_44_pinmux { status = "disabled"; };	/* P8_44: DataIn[3] -> R31[3] */
+			P8_41_pinmux { status = "disabled"; };	/* P8_41: DataIn[4] -> R31[4] */
+			P8_42_pinmux { status = "disabled"; };	/* P8_42: DataIn[5] -> R31[5] */
+			P8_39_pinmux { status = "disabled"; };	/* P8_39: DataIn[6] -> R31[6] */
+			P8_40_pinmux { status = "disabled"; };  /* P8_40: DataIn[7] -> R31[7] */
+
+			/* PRU1 R31 AddrIn[5:0] pins (Mode 6, Input) */
+			P8_27_pinmux { status = "disabled"; };  /* P8_27: AddrIn[0] -> R31[8] */
+			P8_29_pinmux { status = "disabled"; };  /* P8_29: AddrIn[1] -> R31[9] */
+			P8_28_pinmux { status = "disabled"; };  /* P8_28: AddrIn[2] -> R31[10] */
+			P8_30_pinmux { status = "disabled"; };  /* P8_30: AddrIn[3] -> R31[11] */
+			P8_21_pinmux { status = "disabled"; };  /* P8_21: AddrIn[4] -> R31[12] */
+			P8_20_pinmux { status = "disabled"; };	/* P8_20: AddrIn[5] -> R31[13] */
+
+			/* KERNEL GPIO /RESET pin (Mode 7, Input) */
+			P8_38_pinmux { status = "disabled"; };  /* P8_38: /RESET -> GPIO2[15] */
+
+			/* KERNEL GPIO /IRQ pin (Mode 7, Output) */
+			P8_37_pinmux { status = "disabled"; };  /* P8_37: GPIO2[14] -> /IRQ */
+
+			/* KERNEL GPIO VCC pin (Mode 7, Input) */
+			P8_36_pinmux { status = "disabled"; };	/* P8_36: VCC -> GPIO2[16] */
+
+			beaglesatella_helper: helper {
+				compatible = "bone-pinmux-helper";
+				pinctrl-names = "default";
+				pinctrl-0 = <&beaglesatella_pins>;
+				status = "okay";
+			};
+		};
+	};
+
+	fragment@2 {
+		target = <&am33xx_pinmux>;
+		__overlay__ {
+			beaglesatella_pins: beaglesatella_pins {
+				pinctrl-single,pins = <
+					/* PRU0 R30 DataOut_3V[7:0] pins (Mode 5: PRU Output) */
+					0x190 0x25	/* P9_31 */
+					0x194 0x25	/* P9_29 */
+					0x198 0x25	/* P9_30 */
+					0x19c 0x25	/* P9_28 */
+					0x1a0 0x25	/* P9_42.1 */
+					0x1a4 0x25	/* P9_27 */
+					0x1a8 0x25	/* P9_41.1 */
+					0x1ac 0x25	/* P9_25 */
+
+					/* Eliminate P9_41/42 conflicts (Mode 7: GPIO, Input, Disabled Pull-Up/Down, Fast Slew: 0x2F) */
+					0x1b4 0x2F	/* P9_41 */
+					0x164 0x2F	/* P9_42 */
+
+					/* PRU0 R31 /PARD_3V pin (Mode 6: PRU Input) */
+					0x038 0x26	/* P8_16 */
+
+					/* PRU0 R31 /PAWR_3V pin (Mode 6: PRU Input) */
+					0x03c 0x26	/* P8_15 */
+
+					/* PRU1 R31 DataIn_3V[7:0] pins (Mode 6: PRU Input) */
+					0x0a0 0x26	/* P8_45 */
+					0x0a4 0x26	/* P8_46 */
+					0x0a8 0x26	/* P8_43 */
+					0x0ac 0x26	/* P8_44 */
+					0x0b0 0x26	/* P8_41 */
+					0x0b4 0x26	/* P8_42 */
+					0x0b8 0x26	/* P8_39 */
+					0x0bc 0x26	/* P8_40 */
+
+					/* PRU1 R31 AddrIn[5:0] pins (Mode 6: PRU Input) */
+					0x0e0 0x26	/* P8_27 */
+					0x0e4 0x26	/* P8_29 */
+					0x0e8 0x26	/* P8_28 */
+					0x0ec 0x26	/* P8_30 */
+					0x080 0x26	/* P8_21 */
+					0x084 0x26	/* P8_20 */
+
+					/* KERNEL GPIO /RESET_3V pin (Mode 7: GPIO, Input, Pull Up, Fast Slew: 0x37) */
+					0x0c4 0x37	/* P8_38 */ 
+
+					/* KERNEL GPIO /IRQ_3V pin (Mode 7: GPIO, Output, Disabled Pull Up/Down, Fast Slew: 0x0F) */
+					0x0c0 0x0F	/* P8_37 */ 
+
+					/* KERNEL GPIO SFC_VCC_3V pin (Mode 7: GPIO, Input, Pull Down, Fast Slew: 0x27) */
+					0x0c8 0x27	/* P8_36 */
+
+				>;
+			};
+		};
+	};
+
+};
+
+

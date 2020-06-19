@@ -1,0 +1,14 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP 74AHCT125
+D Quad buffer 3 State out
+K TTL buffer 3State
+$ENDCMP
+#
+$CMP ATF1504AS-10JU44
+D Microchip CPLD, 64 Macrocell, 5 V, PLCC-44
+K CPLD
+F http://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-0950-CPLD-ATF1504AS(L)-Datasheet.pdf
+$ENDCMP
+#
+#End Doc Library

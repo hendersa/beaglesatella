@@ -1,0 +1,95 @@
+
+(rules PCB beaglesatella_cape
+  (snap_angle 
+    fortyfive_degree
+  )
+  (autoroute_settings
+    (fanout off)
+    (autoroute on)
+    (postroute on)
+    (vias on)
+    (via_costs 50)
+    (plane_via_costs 5)
+    (start_ripup_costs 100)
+    (start_pass_no 4222)
+    (layer_rule F.Cu
+      (active on)
+      (preferred_direction vertical)
+      (preferred_direction_trace_costs 1.0)
+      (against_preferred_direction_trace_costs 3.0)
+    )
+    (layer_rule B.Cu
+      (active on)
+      (preferred_direction horizontal)
+      (preferred_direction_trace_costs 1.0)
+      (against_preferred_direction_trace_costs 1.5)
+    )
+  )
+  (rule
+    (width 250.0)
+    (clear 200.2)
+    (clear 125.0 (type smd_to_turn_gap))
+    (clear 50.0 (type smd_smd))
+  )
+  (padstack "Via[0-1]_508:254_um"
+    (shape
+      (circle F.Cu 508.0 0.0 0.0)
+    )
+    (shape
+      (circle B.Cu 508.0 0.0 0.0)
+    )
+    (attach off)
+  )
+  (via 
+    "Via[0-1]_508:254_um" "Via[0-1]_508:254_um" default
+  )
+  (via 
+    "Via[0-1]_508:254_um-kicad_default" "Via[0-1]_508:254_um" "kicad_default"
+  )
+  (via_rule
+    default "Via[0-1]_508:254_um"
+  )
+  (via_rule
+    "kicad_default" "Via[0-1]_508:254_um-kicad_default"
+  )
+  (class default
+    (clearance_class default)
+    (via_rule default)
+    (rule
+      (width 250.0)
+    )
+    (circuit 
+      (use_layer F.Cu B.Cu)
+    )
+  )
+  (class "kicad_default"
+    "Net-(P8-Pad3)" "Net-(P8-Pad4)" "Net-(P8-Pad5)" "Net-(P8-Pad6)" "Net-(P8-Pad7)" "Net-(P8-Pad8)" "Net-(P8-Pad9)" "Net-(P8-Pad10)"
+    "Net-(P8-Pad11)" "Net-(P8-Pad12)" "Net-(P8-Pad13)" "Net-(P8-Pad14)" "Net-(P8-Pad17)" "Net-(P8-Pad18)" "Net-(P8-Pad19)" "Net-(P8-Pad22)"
+    "Net-(P8-Pad23)" "Net-(P8-Pad24)" "Net-(P8-Pad25)" "Net-(P8-Pad26)" "Net-(P8-Pad31)" "Net-(P8-Pad32)" "Net-(P8-Pad33)" "Net-(P8-Pad34)"
+    "Net-(P8-Pad35)" "Net-(P9-Pad11)" "Net-(P9-Pad12)" "Net-(P9-Pad13)" "Net-(P9-Pad14)" "Net-(P9-Pad17)" "Net-(P9-Pad18)" "Net-(P9-Pad19)"
+    "Net-(P9-Pad20)" "Net-(P9-Pad21)" "Net-(P9-Pad22)" "Net-(P9-Pad23)" "Net-(P9-Pad24)" "Net-(P9-Pad26)" "Net-(P9-Pad33)" "Net-(P9-Pad35)"
+    "Net-(P9-Pad39)" "Net-(P9-Pad40)" GNDD +3V3 +5V "SYS_5V" ~IRQ /MONO
+    /DOT "Net-(J1-Pad21)" ~RESET /D7 /D6 /D5 /D4 /D3
+    /D2 /D1 /D0 /~PARD /~PAWR /PA7 /PA6 /PA5
+    /PA4 /PA3 /PA2 /PA1 /PA0 "/PA5_3V" "/PA4_3V" "/PA0_3V"
+    "/PA2_3V" "/PA1_3V" "/PA3_3V" "/D6_3V" "/D7_3V" "/D4_3V" "/D5_3V" "/D2_3V"
+    "/D3_3V" "/D0_3V" "/D1_3V" "Net-(P9-Pad9)" "Net-(P9-Pad10)" "/D7_IN_3V" "/D5_IN_3V" "/D3_IN_3V"
+    "/D1_IN_3V" "/D2_IN_3V" "/D0_IN_3V" "Net-(P9-Pad32)" "Net-(P9-Pad34)" "SFC_VCC_3V" "~IRQ_3V" "~RESET_3V"
+    "/D6_IN_3V" "/D4_IN_3V" "/~PAWR_5V" "/~PARD_5V" "~DATA_OE" "/PA5_5V" "/PA4_5V" "/PA3_5V"
+    "/PA2_5V" "/PA0_5V" "/PA1_5V" "Net-(U1-Pad11)" "Net-(U1-Pad9)" "Net-(U1-Pad8)" "Net-(U1-Pad6)" "Net-(U1-Pad4)"
+    "Net-(U1-Pad5)" "SFC_VCC" "Net-(P9-Pad15)" "Net-(P9-Pad16)" "/~PAWR_3V" "/~PARD_3V" SL SR
+    "Net-(J3-Pad9)" "Net-(J3-Pad8)" "Net-(J3-Pad7)" "Net-(J3-Pad6)" "Net-(J3-Pad5)" "Net-(J3-Pad3)" "Net-(J3-Pad1)" /PIN9
+    /PIN3 /PIN5 /PIN1 /PIN17 /PIN27 /PIN21 /PIN11 /PIN19
+    /PIN25 /PIN23 /PIN7 /PIN13 /PIN15 "Net-(J4-Pad16)" "Net-(J4-Pad24)" "Net-(J4-Pad20)"
+    "Net-(J4-Pad28)" "Net-(J4-Pad22)" "Net-(J4-Pad26)" "Net-(J4-Pad18)" "Net-(J4-Pad2)" "Net-(J4-Pad4)" "Net-(J4-Pad6)" "Net-(J4-Pad8)"
+    "Net-(J4-Pad10)" "Net-(J4-Pad12)" "Net-(J4-Pad14)" "Net-(P9-Pad36)" "Net-(P9-Pad37)" "Net-(P9-Pad38)"
+    (clearance_class "kicad_default")
+    (via_rule kicad_default)
+    (rule
+      (width 250.0)
+    )
+    (circuit 
+      (use_layer F.Cu B.Cu)
+    )
+  )
+)

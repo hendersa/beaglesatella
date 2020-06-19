@@ -1,0 +1,147 @@
+%SIGNAL
+PIN  14 =  DATA_BUS_OE 
+PIN  28 =  IRQ 
+PIN  12 =  IRQ_3V 
+PIN  29 =  OUT_A0 
+PIN  31 =  OUT_A1 
+PIN  33 =  OUT_A2 
+PIN  34 =  OUT_A3 
+PIN  36 =  OUT_A4 
+PIN  37 =  OUT_A5 
+PIN  27 =  PARD 
+PIN  40 =  PARD_5V 
+PIN  26 =  PAWR 
+PIN  39 =  PAWR_5V 
+PIN  16 =  SFC_A0 
+PIN  17 =  SFC_A1 
+PIN  18 =  SFC_A2 
+PIN  19 =  SFC_A3 
+PIN  20 =  SFC_A4 
+PIN  21 =  SFC_A5 
+PIN  24 =  SFC_A6 
+PIN  25 =  SFC_A7 
+%END
+
+%FIELD
+%END
+
+%EQUATION
+ADDR_FILTER =>
+    !SFC_A3 & SFC_A4 & !SFC_A5 & !SFC_A6 & SFC_A7
+  # SFC_A3 & !SFC_A5 & !SFC_A6 & SFC_A7
+  # !SFC_A4 & SFC_A5 & !SFC_A6 & SFC_A7
+
+DATA_BUS_OE =>
+    PARD_5V
+  # !PAWR_5V
+
+DATA_BUS_OE.oe  =>
+    1 
+
+IRQ =>
+    IRQ_3V
+
+OUT_A0 =>
+    PARD_5V & !PAWR_5V & SFC_A0 & !SFC_A3 & !SFC_A4 & SFC_A5
+  # !PARD_5V & PAWR_5V & SFC_A0 & !SFC_A4 & SFC_A5
+  # !PARD_5V & PAWR_5V & SFC_A0 & SFC_A3 & !SFC_A5
+  # PARD_5V & !PAWR_5V & SFC_A0 & SFC_A3 & !SFC_A4
+  # !PARD_5V & PAWR_5V & SFC_A0 & !SFC_A3 & SFC_A4 & !SFC_A5
+  # PARD_5V & !PAWR_5V & SFC_A0 & SFC_A4 & !SFC_A5
+
+OUT_A0.oe  =>
+    1 
+
+OUT_A1 =>
+    PARD_5V & !PAWR_5V & SFC_A1 & !SFC_A3 & !SFC_A4 & SFC_A5
+  # !PARD_5V & PAWR_5V & SFC_A1 & !SFC_A4 & SFC_A5
+  # !PARD_5V & PAWR_5V & SFC_A1 & SFC_A3 & !SFC_A5
+  # PARD_5V & !PAWR_5V & SFC_A1 & SFC_A3 & !SFC_A4
+  # !PARD_5V & PAWR_5V & SFC_A1 & !SFC_A3 & SFC_A4 & !SFC_A5
+  # PARD_5V & !PAWR_5V & SFC_A1 & SFC_A4 & !SFC_A5
+
+OUT_A1.oe  =>
+    1 
+
+OUT_A2 =>
+    PARD_5V & !PAWR_5V & SFC_A2 & !SFC_A3 & !SFC_A4 & SFC_A5
+  # !PARD_5V & PAWR_5V & SFC_A2 & !SFC_A4 & SFC_A5
+  # !PARD_5V & PAWR_5V & SFC_A2 & SFC_A3 & !SFC_A5
+  # PARD_5V & !PAWR_5V & SFC_A2 & SFC_A3 & !SFC_A4
+  # !PARD_5V & PAWR_5V & SFC_A2 & !SFC_A3 & SFC_A4 & !SFC_A5
+  # PARD_5V & !PAWR_5V & SFC_A2 & SFC_A4 & !SFC_A5
+
+OUT_A2.oe  =>
+    1 
+
+OUT_A3 =>
+    PARD_5V & !PAWR_5V & SFC_A3 & SFC_A4 & !SFC_A5
+  # !PARD_5V & PAWR_5V & SFC_A3 & SFC_A4 & !SFC_A5
+  # !PARD_5V & PAWR_5V & SFC_A3 & !SFC_A4
+  # PARD_5V & !PAWR_5V & SFC_A3 & !SFC_A4
+
+OUT_A3.oe  =>
+    1 
+
+OUT_A4 =>
+    !PARD_5V & PAWR_5V & SFC_A4 & !SFC_A5
+  # PARD_5V & !PAWR_5V & SFC_A4 & !SFC_A5
+
+OUT_A4.oe  =>
+    1 
+
+OUT_A5 =>
+    !PARD_5V & PAWR_5V & !SFC_A4 & SFC_A5
+  # PARD_5V & !PAWR_5V & !SFC_A4 & SFC_A5
+
+OUT_A5.oe  =>
+    1 
+
+PARD_5V =>
+    PARD
+  # !PAWR
+  # !SFC_A7
+  # SFC_A6
+  # !SFC_A3 & !SFC_A4 & !SFC_A5
+  # SFC_A4 & SFC_A5
+
+PARD_5V.oe  =>
+    1 
+
+PAWR_5V =>
+    !PARD
+  # PAWR
+  # !SFC_A7
+  # SFC_A6
+  # !SFC_A3 & !SFC_A4 & !SFC_A5
+  # SFC_A4 & SFC_A5
+
+PAWR_5V.oe  =>
+    1 
+
+TEMP_A0 =>
+    SFC_A0 & !SFC_A3 & !SFC_A4 & SFC_A5
+  # SFC_A0 & SFC_A4 & !SFC_A5
+  # SFC_A0 & SFC_A3 & !SFC_A4
+
+TEMP_A1 =>
+    SFC_A1 & !SFC_A3 & !SFC_A4 & SFC_A5
+  # SFC_A1 & SFC_A4 & !SFC_A5
+  # SFC_A1 & SFC_A3 & !SFC_A4
+
+TEMP_A2 =>
+    SFC_A2 & !SFC_A3 & !SFC_A4 & SFC_A5
+  # SFC_A2 & SFC_A4 & !SFC_A5
+  # SFC_A2 & SFC_A3 & !SFC_A4
+
+TEMP_A3 =>
+    SFC_A3 & SFC_A4 & !SFC_A5
+  # SFC_A3 & !SFC_A4
+
+TEMP_A4 =>
+    SFC_A4 & !SFC_A5
+
+TEMP_A5 =>
+    !SFC_A4 & SFC_A5
+
+%END

@@ -1,0 +1,5 @@
+(sym_lib_table
+  (lib (name pwr_BeagleBone)(type Legacy)(uri ${KIPRJMOD}/pwr_BeagleBone.lib)(options "")(descr ""))
+  (lib (name BeagleSatella)(type Legacy)(uri ${KIPRJMOD}/BeagleSatella.lib)(options "")(descr ""))
+  (lib (name beaglesatella_cape-rescue)(type Legacy)(uri ${KIPRJMOD}/beaglesatella_cape-rescue.lib)(options "")(descr ""))
+)
